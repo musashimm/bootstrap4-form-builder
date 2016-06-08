@@ -37,6 +37,7 @@ module Bootstrap4FormBuilder
           def standard_html(type, method, options = {})
             form_group_builder(method, options) do
               content = []
+              error_suppress = options.delete(:error_suppress)
               options[:class] = [control_class, options[:class]].compact.join(" ")
               options[:class] = [options[:class], "form-control-danger"].compact.join(" ") if has_errors?(method)
 
@@ -50,7 +51,7 @@ module Bootstrap4FormBuilder
                   content << @template.send(type, object_name, method, options)
                 end
               end
-              content << generate_error_help(method, options)
+              content << generate_error_help(method, options) unless error_suppress
               content.compact.join.html_safe
             end
           end
@@ -67,7 +68,10 @@ module Bootstrap4FormBuilder
 
               label_name = name
 
-              label_class = options[:label_class]
+              label_class = options[:label_class] || ""
+              label_class << " c-input c-checkbox" if options[:custom]
+
+              html << content_tag(:span, '', class: 'c-indicator') if options[:custom]
 
               if options[:inline]
                 label_class = ["checkbox-inline", label_class].compact.join(' ')
@@ -82,18 +86,25 @@ module Bootstrap4FormBuilder
 
           def radio_button(name, value, *args)
             options = args.extract_options!.symbolize_keys!
+            tooltip = options.delete(:tooltip)
+            tooltip_placement = options.delete(:tooltip_placement)
             args << options.except(:label, :label_class, :inline)
             label_class = [options[:label_class]]
+            label_class << ' c-input c-radio' if options[:custom]
 
             temporarily_disable_field_error_proc do
-              html = super(name, value, *args) + " " + value.humanize
+              html_args = [super(name, value, *args)]
+              html_args << content_tag(:span, '', class: 'c-indicator') if options[:custom]
+              html_args << options[:label]
+              html_args << tooltip_tag(tooltip, tooltip_placement)
+              html = html_args.join(" ").html_safe
 
               if options[:inline]
                 label_class = ["radio-inline", label_class].compact.join(" ")
-                label(value, html, value: value, class: label_class)
+                label(name, html, value: value, class: label_class)
               else
                 content_tag(:div, class: "radio") do
-                  label(value, html, value: value, class: label_class)
+                  label(name, html, value: value, class: label_class)
                 end
               end
             end
@@ -103,14 +114,21 @@ module Bootstrap4FormBuilder
             options = args.extract_options!
             name = args.first
 
+            tooltip = options.delete(:tooltip)
+            tooltip_placement = options.delete(:tooltip_placement)
             options[:class] = ["form-group", options[:class]]
             options[:class] << label_error_class if has_errors?(name)
+            options[:class] << fieldset_errors_class if has_errors?(name)
             options[:class] = options[:class].compact.join(" ")
 
             content_tag(:div, options.except(:label, :label_class)) do
               label_class = [@label_col, options[:label_class]].compact.join(' ')
 
-              label = @template.label_tag(nil, options[:label], class: label_class) if options[:label]
+              if options[:label]
+                options[:label] = [options[:label], tooltip_tag(tooltip, tooltip_placement)].join(" ").html_safe if tooltip
+                label = @template.label_tag(nil, options[:label], class: label_class)
+              end
+
               controls = capture(&block).to_s
 
               error_help = generate_error_help(name)
@@ -121,9 +139,11 @@ module Bootstrap4FormBuilder
             end
           end
 
-          def submit(name = nil, options = {})
+          def submit(name = nil, options = {}, &block)
             options[:class] = ["btn btn-default", options[:class]].compact.join(" ")
-            super(name, options)
+            content_tag(:button, '', type: 'submit', class: options[:class]) do
+              block_given? ? yield : name
+            end
           end
 
           def primary(name = nil, options = {})
@@ -148,6 +168,14 @@ module Bootstrap4FormBuilder
             content_tag :ul, class: 'bootstrap-form-error-summary' do
               object.errors.full_messages.each do |error|
                 concat content_tag(:li, error)
+              end
+            end
+          end
+
+          def error_field(name, options = {})
+            if has_errors?(name)
+              content_tag :div, class: 'row m-b-1' do
+                concat content_tag :div, content_tag(:small, get_error_messages(name), class: 'text-muted error-text'), class: 'col-xs-12'
               end
             end
           end
@@ -178,11 +206,19 @@ module Bootstrap4FormBuilder
             end
           end
 
+          def tooltip_tag(tooltip, tooltip_placement)
+            return "" unless tooltip
+            tooltip_placement ||= 'right'
+            content_tag(:span, '', :class => 'help-tooltip', :"data-toggle" => "tooltip", :"data-placement" => tooltip_placement, :title => tooltip)
+          end
+
           def generate_label(object_name, name, *args)
             options = args.extract_options!
+            label_name  = options.delete(:label)
+            return "" if label_name == :nolabel
             label_class = options.delete(:label_class)
             tooltip = options.delete(:tooltip)
-            tooltip_placement = options.delete(:tooltip_placement) || 'right'
+            tooltip_placement = options.delete(:tooltip_placement)
             label_class = [@label_col, label_class]
             # label_class << "form-control-label" if gridded_form?
             label_class << "form-control-label"
@@ -190,11 +226,10 @@ module Bootstrap4FormBuilder
             # label_class << label_error_class if has_errors?(name)
             label_class = label_class.compact.join(" ")
 
-            label_name  = options.delete(:label)
-            tooltip_string = tooltip ? content_tag(:span, '', :class => 'help-tooltip', :"data-toggle" => "tooltip", :"data-placement" => tooltip_placement, :title => tooltip) : ""
-            label_name ||= I18n.t("activerecord.attributes.#{object_name}.name", :default => name.to_s.humanize)
+            trans_key = "activerecord.attributes.#{object_name}.#{name}"
+            label_name ||= I18n.t(trans_key, :default => trans_key)
 
-            label(name, [label_name, tooltip_string].join(" ").html_safe, class: label_class)
+            label(name, [label_name, tooltip_tag(tooltip, tooltip_placement)].join(" ").html_safe, class: label_class)
           end
 
           def generate_error_help(name, *args)
