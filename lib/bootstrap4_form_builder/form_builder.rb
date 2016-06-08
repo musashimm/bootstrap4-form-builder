@@ -226,6 +226,7 @@ module Bootstrap4FormBuilder
             # label_class << label_error_class if has_errors?(name)
             label_class = label_class.compact.join(" ")
 
+            label_name  = options.delete(:label)
             trans_key = "activerecord.attributes.#{object_name}.#{name}"
             label_name ||= I18n.t(trans_key, :default => trans_key)
 
