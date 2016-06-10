@@ -58,20 +58,23 @@ module Bootstrap4FormBuilder
 
           def check_box(name, options = {}, checked_value = "1", unchecked_value = "0", &block)
             options = options.symbolize_keys!
+            tooltip = options.delete(:tooltip)
+            tooltip_placement = options.delete(:tooltip_placement)
             check_box_options = options.except(:label, :label_class, :inline)
             label_class = [options[:label_class]]
 
             temporarily_disable_field_error_proc do
-              html = super(name, check_box_options, checked_value, unchecked_value)
               label_content = block_given? ? capture(&block) : options[:label]
-              html.concat(" ").concat(label_content || (object && object.class.human_attribute_name(name)) || name.to_s.humanize)
-
               label_name = name
-
               label_class = options[:label_class] || ""
               label_class << " c-input c-checkbox" if options[:custom]
 
-              html << content_tag(:span, '', class: 'c-indicator') if options[:custom]
+              html_args = [super(name, check_box_options, checked_value, unchecked_value)]
+              html_args << content_tag(:span, '', class: 'c-indicator') if options[:custom]
+              html_args << " "
+              html_args << label_content || (object && object.class.human_attribute_name(name)) || name.to_s.humanize
+              html_args << tooltip_tag(tooltip, tooltip_placement)
+              html = html_args.join(" ").html_safe
 
               if options[:inline]
                 label_class = ["checkbox-inline", label_class].compact.join(' ')
