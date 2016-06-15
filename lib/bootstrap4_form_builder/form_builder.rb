@@ -177,8 +177,8 @@ module Bootstrap4FormBuilder
 
           def error_field(name, options = {})
             if has_errors?(name)
-              content_tag :div, class: 'row m-b-1' do
-                concat content_tag :div, content_tag(:small, get_error_messages(name), class: 'text-muted error-text'), class: 'col-xs-12'
+              content_tag :div, class: 'error-field-wrapper' do
+                concat content_tag(:small, get_error_messages(name), class: 'text-muted error-text')
               end
             end
           end
